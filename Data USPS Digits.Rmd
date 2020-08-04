@@ -1,0 +1,165 @@
+---
+title: "ML-AI"
+author: "Eveline Surbakti"
+date: "March 28, 2020"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r, include=FALSE}
+# load packages and data
+load("data_usps_digits.RData")
+library(keras)
+```
+
+```{r}
+plot_digit <- function(index, data) {
+  tmp = (-data + 1) / 2
+  z = matrix( data = as.numeric(data[index, 256:1]), 16, 16 )
+  image(z[16:1,1:16], col = gray((1:100)/100),
+        xaxt = "n", yaxt = "n")}
+```
+
+```{r}
+# plot few example digits
+par(mfrow=c(1,3),mar=rep(1.5,4))
+plot_digit(111,x_train)
+plot_digit(222,x_train)
+plot_digit(333,x_train)
+```
+
+```{r}
+#checking the data
+range(x_train)
+```
+
+```{r}
+#checking the data
+range(x_test)
+```
+
+```{r}
+# normalize
+range_norm <- function(x, a = 0, b = 1) {
+  ( (x - min(x)) / (max(x) - min(x)) )*(b - a) + a }
+tensorflow::tf$random$set_seed(1)
+x_train= apply(x_train, 2, range_norm)
+x_test=apply(x_test,2,range_norm)
+range(x_train)
+```
+
+```{r}
+range(x_test)
+```
+
+```{r}
+tensorflow::tf$random$set_seed(1)
+y_train<-to_categorical(y_train,num_classes = NULL)
+y_test<-to_categorical(y_test, num_classes = NULL)
+```
+
+```{r}
+V <- ncol(x_train)
+model <- keras_model_sequential() %>%
+  layer_dense(units = 256, activation = "relu", input_shape = V) %>%
+  layer_dense(units = 128, activation = "relu") %>%
+  layer_dense(units= 10,activation = "softmax") %>%
+  compile(loss = "categorical_crossentropy", metrics = "accuracy",
+    optimizer = optimizer_sgd())
+count_params(model)
+fit<-model%>%fit(
+  x=x_train, y=y_train,
+  validation_data=list(x_test, y_test),
+  epochs=100)
+```
+
+
+```{r}
+plot(fit)
+smooth_line<-function(y){
+  x=1:length(y)
+  out=predict(loess(y~x))
+  return(out)}
+```
+
+```{r}
+cols<-c("black","dodgerblue3","gray50","deepskyblue2") 
+tensorflow::tf$random$set_seed(1)
+model_reg <- keras_model_sequential() %>%
+  layer_dense(units = 256, activation = "relu", input_shape = V,
+              kernel_regularizer = regularizer_l2(l = 0.0005)) %>%
+  layer_dense(units = 128, activation = "relu",
+              kernel_regularizer = regularizer_l2(l = 0.0005)) %>%
+  layer_dense(units = 10, activation = "softmax") %>%
+  compile(loss = "categorical_crossentropy",
+    optimizer = optimizer_sgd(),metrics = "accuracy")
+count_params(model_reg)
+fit_extra <- model_reg %>% fit(x = x_train, y = y_train,validation_data = list(x_test, y_test), epochs = 100)
+out1<-1-cbind(fit$metrics$accuracy,fit$metrics$val_accuracy,
+              fit_extra$metrics$accuracy,fit_extra$metrics$val_accuracy)
+```
+
+```{r}
+matplot(out1,pch=19,ylab="Error",xlab ="Epochs",col=adjustcolor(cols,0.3),log="y")
+matlines(apply(out1,2,smooth_line),lty=1,col=cols,lwd=2)
+legend("bottomleft",legend=c("Training","Test","Training_extra","Test_extra"),fill=cols,bty="n")
+```
+
+```{r}
+apply(out1,2,min)
+```
+
+3 LAYERS AND REGULARIZATION
+
+```{r}
+plot_digit <- function(index, data) {
+  tmp = (-data + 1) / 2
+  z = matrix( data = as.numeric(data[index, 256:1]), 16, 16 )
+  image(z[16:1,1:16], col = gray((1:100)/100),
+        xaxt = "n", yaxt = "n")
+}
+
+model2 <- keras_model_sequential() %>%
+  layer_dense(units = 256, activation = "relu", input_shape = V) %>%
+  layer_dense(units = 128, activation = "relu") %>%
+  layer_dense(units = 64, activation = "relu") %>%
+  layer_dense(units= 10,activation = "softmax") %>%
+  compile(loss = "categorical_crossentropy", metrics = "accuracy",
+          optimizer = optimizer_sgd())
+count_params(model2)
+fit2<-model2%>%fit(
+  x=x_train, y=y_train,
+  validation_data=list(x_test, y_test),
+  epochs=100)
+```
+
+```{r}
+plot(fit2)
+smooth_line2<-function(y){
+  x=1:length(y)
+  out=predict(loess(y~x))
+  return(out)
+}
+```
+
+```{r}
+model_reg2 <- keras_model_sequential() %>%
+  layer_dense(units = 256, activation = "relu", input_shape = V,
+              kernel_regularizer = regularizer_l2(l = 0.0005)) %>%
+  layer_dense(units = 128, activation = "relu",
+              kernel_regularizer = regularizer_l2(l = 0.0005))%>%
+  layer_dense(units = 64, activation = "relu",
+              kernel_regularizer = regularizer_l2(l = 0.0005)) %>%
+  layer_dense(units = 10, activation = "softmax") %>%
+  compile(loss = "categorical_crossentropy",
+          optimizer = optimizer_sgd(),metrics = "accuracy")
+count_params(model_reg2)
+fit_extra2 <- model_reg2 %>% fit(x = x_train, y = y_train,validation_data = list(x_test, y_test), epochs = 100)
+out2<-1-cbind(fit2$metrics$accuracy,fit2$metrics$val_accuracy,
+              fit_extra2$metrics$accuracy,fit_extra2$metrics$val_accuracy)
+matplot(out2,pch=19,ylab="Error",xlab = "Epochs",col=adjustcolor(cols,0.3),log="y")
+matlines(apply(out2,2,smooth_line),lty=1,col=cols,lwd=2)
+legend("bottomleft",legend=c("Training","Test","Training_extra","Test_extra"),fill=cols,bty="n")
+apply(out2,2,min)
+```
