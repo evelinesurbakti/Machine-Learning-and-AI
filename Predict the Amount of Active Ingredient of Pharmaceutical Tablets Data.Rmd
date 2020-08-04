@@ -1,0 +1,139 @@
+---
+title: "ML-AI"
+author: "Eveline Surbakti"
+date: "2/20/2020"
+output: word_document
+---
+
+```{r} 
+load("data_nir_tablets.Rdata")
+library(Rtsne)
+range(x)
+
+#standardizing
+
+x <- scale(x) 
+x_test <- scale(x_test) 
+rtsne <- Rtsne(x, perplexity = 35) #set the rtsne with range between 5-50
+cols <- c("red", "blue")[y+1]
+```
+
+
+```{r}
+plot(rtsne$Y, pch = 22, col = adjustcolor(cols, 0.35), main = "NIR Tablets")
+```
+
+
+
+```{r}
+library(e1071)
+#misclassification error function
+misclassification_error <- function(y, yhat) {
+  tab <- table(y, yhat)
+  1 - classAgreement(tab)$diag
+}
+```
+
+
+```{r}
+library(glmnet) # load package
+# set training, validation and test data sizes
+TOT <- nrow(x)
+
+#80:20 rule
+N <- floor(TOT*0.8) #training
+L <- floor(TOT*0.2) #validation
+test <- nrow(x_test) #test
+# number of replication
+B <- 100
+#class checking
+table(y)
+
+tau <- 0.5
+S <- 100
+
+#setting the lambda
+pt <- seq(-1.89,-5.3, length = 100)
+lambda <- exp(pt)
+```
+
+
+
+```{r}
+plot(lambda)
+```
+
+
+```{r}
+
+library(glmnet)
+#the errors
+error_training <- error_validation <- matrix(NA, B, S)
+error_test <- lambda_best <- rep(NA, B)
+
+
+#training and validation
+for ( b in 1:B ) {
+  # sample train and validation data
+  train <- sample(1:TOT, N)
+  val <- setdiff(1:TOT, c(train))
+  # train the model
+  fit <- glmnet(x[train,], y[train], family = "binomial", alpha = 1, lambda = lambda)
+  # obtain predicted classes for training and validation data
+  p_train <- predict(fit, newx = x[train,], type = "response")
+  y_train <- apply(p_train, 2, function(v) ifelse(v > tau, 1, 0))
+  #
+  p_val <- predict(fit, newx = x[val,], type = "response")
+  y_val <- apply(p_val, 2, function(v) ifelse(v > tau, 1, 0))
+  # estimate misclassification error
+  error_training[b,] <- sapply( 1:S, function(s) misclassification_error(y[train], y_train[,s]) )
+  error_validation[b,] <- sapply( 1:S, function(s) misclassification_error(y[val], y_val[,s]) )
+  # select lambda which minimizes misclassification error on validation data
+  best <- which.min(error_validation[b,])
+}
+
+# take 1-lambda as lambda is inversely related to complexity
+matplot(x = 1-lambda, t(error_training), type = "l", lty = 1, ylab = "Error", xlab = "1 - Lambda", col = adjustcolor("black", 0.05), log = "y") # error on log scale
+matplot(x = 1-lambda, t(error_validation), type = "l", lty = 1, col = adjustcolor("blue", 0.05), add = TRUE, log = "y")
+lines(1-lambda, colMeans(error_training), col = "red", lwd = 2)
+lines(1-lambda, colMeans(error_validation), col = "blue", lwd = 2)
+legend("bottomleft", legend = c("Training Error", "Validation Error"),
+       fill = c("red", "blue"))
+# get optimal lambda
+bestlambda <- lambda[ which.min( colMeans(error_validation) ) ]
+abline(v = 1 - lambda_star, col = "magenta")
+
+```
+
+```{r}
+lambda_star
+```
+
+
+```{r}
+# train model with optimal hyperparameter lambda
+# use all =data which is not test data
+fit <- glmnet(x, y, family = "binomial", lambda = lambda_star)
+
+# compute misclassification error
+p_test <- predict(fit, newx = x_test, type = "response")
+ytest <- apply(p_test, 2, function(v) ifelse(v > tau, 1, 0))
+table(y_test, ytest)
+
+```
+
+```{r}
+misclassification_error(y_test, ytest)
+```
+
+
+```{r}
+w_hat <- coef(fit, s = lambda_star)
+cols <- ifelse(w_hat != 0, "red", "black")
+plot(w_hat, col = cols, pch = 19,
+     xlab = "Weights", ylab = "Estimated weight") 
+# many weights are not active!
+```
+
+
+
